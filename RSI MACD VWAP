@@ -1,0 +1,70 @@
+# approach: invest in equities using a diversify portfolio (technology security, lifestyle, social media, electrical vehicle, technology)
+# over 4years duration, medium to large cap companies, medium to long term growth
+# benefit from price swing and price momemteum in both directions
+# RSI & MACD as basic indicator, VWAP as enhance strategy
+
+class HipsterBlackCoyote(QCAlgorithm):
+
+    def Initialize(self):
+        self.SetStartDate(2017, 1, 1)  # Set Start Date
+        self.SetEndDate(2020, 12, 31) # set End Date
+        self.SetCash(100000)  # Set how much to invest in cash mode
+        
+        self.equities = ["BB", "DIS", "NFLX", "TSLA", "AMZN"] # handpick 5 US counters
+        
+        # got to iterate through the list of US stocks right + some strategy lah
+        for symbol in self.equities:
+            self.AddEquity(symbol, Resolution.Daily)
+            self.rsi = self.RSI(symbol, 14)
+            self.macd = self.MACD(symbol, 12, 26, 9, MovingAverageType.Exponential, Resolution.Daily)
+            self.vwap = self.VWAP(symbol, 14, Resolution.Daily)
+            # the ideal VWAP code as below from web:
+            # var vwap = VWAP(Symbol symbol, int period, Resolution resolution = null, Func`2[Data.IBaseData,Data.Market.TradeBar] selector = null)
+       
+        self.back_1 = None
+        self.back_2 = None
+        self.current = None
+        
+        self.entry_price = None
+        self.stop = False
+        
+    def OnData(self, data):
+        
+        if self.stop:
+            return
+        
+        # make sure the closing price is higher than the previous day
+        for symbol in self.equities:
+            self.back_2 = self.back_1
+            self.back_1 = self.current
+            self.current = self.Securities[symbol].Close
+           
+            if self.back_2 == None or self.back_1 == None or self.current == None: return
+           
+            # setup for LONG trading conditions (fufill ALL 4 conditions leh, aggressive 18% allocation each)
+            if self.back_1 > self.back_2 and self.current > self.back_1 and self.rsi.Current.Value < 70 and \
+            (self.macd.Current.Value > self.macd.Signal.Current.Value) & (self.vwap.Current.Value > self.Securities[symbol].Close):
+                   if not self.Securities[symbol].Invested:
+                       self.SetHoldings(symbol, 0.18)
+                       self.entry_price = self.current
+                       
+                   # to exit position for stop loss and take profit
+                   if self.Securities[symbol].Invested:
+                       if self.current <= self.entry_price - 0.05:
+                           self.Liquidate(symbol, "better-stop-loss")
+                       elif self.current >= self.entry_price + 0.10:
+                           self.Liquidate(symbol, "wohoo-take-profit")
+                           
+            # setup for SHORT trading conditions, short 10% of portfolio for each symbol
+            if self.back_1 < self.back_2 and self.current < self.back_1 and self.rsi.Current.Value > 80 and \
+            (self.macd.Current.Value < self.macd.Signal.Current.Value) & (self.vwap.Current.Value < self.Securities[symbol].Close):
+                   if not self.Securities[symbol].Invested:
+                       self.SetHoldings(symbol, -0.1)
+                       self.entry_price = self.current
+                       
+                   # to exit position for stop loss and take profit
+                   if self.Securities[symbol].Invested:
+                       if self.current >= self.entry_price - 0.03:
+                           self.Liquidate(symbol, "better-stop-loss")
+                       elif self.current <= self.entry_price + 0.10:
+                           self.Liquidate(symbol, "wohoo-take-profit")
